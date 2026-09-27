@@ -36,12 +36,14 @@ Secondary measures:
 1. Record the model name, exact checkpoint/revision, GPU, VRAM, software
    versions, and experiment date.
 2. Run the CPU-only tests before using the GPU.
-3. Confirm that both task definitions load `research_24.json` and contain 24 indices.
-4. Start the model server once and do not alter its settings between conditions.
-5. Run both conditions. Preserve the raw `runs.jsonl`, `overall.json`, and logs.
-6. Run `analyze_results.py` on the two `runs.jsonl` files.
-7. Inspect any missing or duplicate task indices before interpreting results.
-8. Manually review trajectories labeled `repeated_action` or
+3. Run `python research/state_maintenance/preflight.py`.
+4. Run the four-task pilot in both conditions and verify its output structure.
+5. Confirm that both full task definitions load `research_24.json` and contain 24 indices.
+6. Start the model server once and do not alter its settings between conditions.
+7. Run both full conditions. Preserve the raw `runs.jsonl`, `overall.json`, and logs.
+8. Run `analyze_results.py` on the two full `runs.jsonl` files.
+9. Inspect any missing or duplicate task indices before interpreting results.
+10. Manually review trajectories labeled `repeated_action` or
    `repeated_failed_action`; record manual judgments separately from automatic labels.
 
 ## Interpretation rules

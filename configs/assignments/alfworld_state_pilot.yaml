@@ -1,0 +1,16 @@
+import: definition.yaml
+
+concurrency:
+  task:
+    alfworld-state-pilot-baseline: 1
+    alfworld-state-pilot-structured: 1
+  agent:
+    vicuna-7b: 1
+
+assignments:
+  - agent: vicuna-7b
+    task:
+      - alfworld-state-pilot-baseline
+      - alfworld-state-pilot-structured
+
+output: "outputs/state-maintenance-pilot-{TIMESTAMP}"

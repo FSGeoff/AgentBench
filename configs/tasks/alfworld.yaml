@@ -34,3 +34,16 @@ alfworld-state-structured:
     name: alfworld-state-structured
     split: "research_24"
     state_mode: "structured"
+
+# Four-task smoke test to run before committing GPU time to the full study.
+alfworld-state-pilot-baseline:
+  parameters:
+    name: alfworld-state-pilot-baseline
+    split: "research_pilot_4"
+    state_mode: "baseline"
+
+alfworld-state-pilot-structured:
+  parameters:
+    name: alfworld-state-pilot-structured
+    split: "research_pilot_4"
+    state_mode: "structured"

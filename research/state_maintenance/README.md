@@ -43,9 +43,24 @@ inference; the tracker, analysis, and unit tests run on CPU.
 
 ```bash
 python -m unittest discover -s tests/state_maintenance -v
+python research/state_maintenance/preflight.py
 ```
 
-## Run the experiment
+## Run the pilot first
+
+The pilot uses four tasks in each condition—eight task executions total—with
+the existing `vicuna-7b` agent definition. After starting the task and model
+services, run:
+
+```bash
+python -m src.assigner -c configs/assignments/alfworld_state_pilot.yaml
+```
+
+Use the pilot to confirm that both conditions finish, create `runs.jsonl`, and
+contain the additional experiment fields. Pilot results are a systems check and
+should not be reported as the final study findings.
+
+## Run the full experiment
 
 Start the AgentBench task services, then run:
 
