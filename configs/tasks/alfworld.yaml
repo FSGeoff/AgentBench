@@ -20,3 +20,17 @@ alfworld-std:
   parameters:
     name: alfworld-std
     split: "standard"
+
+# Matched research conditions. Both use the same fixed 24-task split and
+# differ only in whether the structured state summary is shown to the model.
+alfworld-state-baseline:
+  parameters:
+    name: alfworld-state-baseline
+    split: "research_24"
+    state_mode: "baseline"
+
+alfworld-state-structured:
+  parameters:
+    name: alfworld-state-structured
+    split: "research_24"
+    state_mode: "structured"

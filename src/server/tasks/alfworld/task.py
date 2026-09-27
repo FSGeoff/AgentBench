@@ -4,6 +4,7 @@ from typing import Dict, Any
 from src.server.task import Task, Session
 from src.server.tasks.alfworld.environment import SingleAlfredTWEnv
 from src.server.tasks.alfworld.utils import *
+from src.server.tasks.alfworld.state_tracker import StateTracker
 from src.typings import TaskOutput, TaskSampleExecutionResult, SampleStatus, AgentOutputStatus
 
 import traceback
@@ -43,6 +44,9 @@ class ALFWorld(Task):
 
         # other configs
         self.max_step = kwargs.get("max_step", 50)
+        self.state_mode = kwargs.get("state_mode", "baseline")
+        if self.state_mode not in {"baseline", "structured"}:
+            raise ValueError("state_mode must be 'baseline' or 'structured'")
         self.prefixes = {
             'pick_and_place': 'put',
             'pick_clean_then_place': 'clean',
@@ -160,7 +164,19 @@ class ALFWorld(Task):
         # add instruction
         # history[0] = self.get_task_instruction() + "Here is one example.\n" + history[0]
         # self.inject_info(session, history)
-        log_info = {"log": []}
+        tracker = StateTracker(original_goal=ob, initial_observation=ob)
+        log_info = {
+            "log": [],
+            "experiment": {
+                "condition": self.state_mode,
+                "state_snapshots": [tracker.snapshot()],
+                "repeated_actions": 0,
+                "repeated_failed_actions": 0,
+                "interaction_rounds": 0,
+                "failure_types": [],
+                "state_related_errors": [],
+            },
+        }
         session.inject({"role": "user", "content": self.get_task_instruction()})
         session.inject(
             {"role": "agent", "content": "OK. I'll follow your instructions and try my best to solve the task."})
@@ -170,7 +186,8 @@ class ALFWorld(Task):
         history[0] = "Here is one example.\n" + history[0]
         self.inject_info(session, history)
 
-        init_prompt = "Here is your task. " + ob + self.get_available_actions(info.get('admissible_commands', [[]])[0])
+        state_prompt = tracker.render() if self.state_mode == "structured" else ""
+        init_prompt = "Here is your task. " + ob + state_prompt + self.get_available_actions(info.get('admissible_commands', [[]])[0])
         log_info["init_prompt"] = init_prompt
         session.inject({"role": "user", "content": init_prompt})
         # init 
@@ -183,6 +200,7 @@ class ALFWorld(Task):
             output = await session.action()
             if output.status == AgentOutputStatus.AGENT_CONTEXT_LIMIT:
                 finish_reason = SampleStatus.AGENT_CONTEXT_LIMIT
+                log_info["experiment"]["failure_types"].append("context_limit_exceeded")
                 break
             output = output.content or ""
 
@@ -191,13 +209,21 @@ class ALFWorld(Task):
             action = process_action(output, admissible_commands)
             if not action:
                 finish_reason = SampleStatus.AGENT_INVALID_ACTION
+                log_info["experiment"]["failure_types"].append("invalid_format_or_action")
                 break
-            session.history[-2].content = session.history[-2].content.split("AVAILABLE ACTIONS")[
-                0]  # reduce the prompt length
+            # Keep only the durable observation in older turns.  Available
+            # actions and state summaries are refreshed every round and would
+            # otherwise leave stale copies in the conversation history.
+            prior_user_message = session.history[-2].content
+            prior_user_message = prior_user_message.split("STRUCTURED TASK STATE")[0]
+            prior_user_message = prior_user_message.split("AVAILABLE ACTIONS")[0]
+            session.history[-2].content = prior_user_message
 
             observation, reward, done, info = env.step([action])
             observation, reward, done = process_ob(observation[0]), info['won'][0], done[0]
-            session.inject({"role": "user", "content": observation + self.get_available_actions(
+            state_update = tracker.update(action, observation, output)
+            state_prompt = tracker.render() if self.state_mode == "structured" else ""
+            session.inject({"role": "user", "content": observation + state_prompt + self.get_available_actions(
                 info.get('admissible_commands', [[]])[0])})
 
             # save
@@ -208,8 +234,17 @@ class ALFWorld(Task):
                 "admissible_commands": admissible_commands,
                 "observation": observation,
                 "done": done,
+                "action_failed": state_update["action_failed"],
+                "repeated_action": state_update["repeated_action"],
+                "state_snapshot": state_update["state"],
             }
             log_info["log"].append(payload)
+            experiment = log_info["experiment"]
+            experiment["state_snapshots"].append(tracker.snapshot())
+            experiment["repeated_actions"] = tracker.repeated_actions
+            experiment["repeated_failed_actions"] = tracker.repeated_failed_actions
+            experiment["interaction_rounds"] = i + 1
+            experiment["state_related_errors"] = list(tracker.state_related_errors)
 
             # print("====== action ======")
             # print("output: ", output)
@@ -227,10 +262,12 @@ class ALFWorld(Task):
                 pre_acts = [pre_log["output"] for pre_log in pre_logs]
                 if len(list(set(pre_acts))) == 1:
                     print("repeat actions for 3 times: failure")
+                    experiment["failure_types"].append("repeated_action_loop")
                     return 0, log_info, SampleStatus.AGENT_INVALID_ACTION
 
             if done:
                 return reward, log_info, finish_reason
         else:
             finish_reason = SampleStatus.TASK_LIMIT_REACHED
+            log_info["experiment"]["failure_types"].append("task_limit_exceeded")
         return 0, log_info, finish_reason
