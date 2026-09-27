@@ -1,4 +1,73 @@
-# AgentBench
+# AgentBench State-Maintenance Research Extension
+
+> **Research branch:** `research/state-maintenance-v0.2`
+>
+> **Base implementation:** archived paper-era AgentBench v0.2
+>
+> **Status:** implementation and CPU-only validation complete; real model runs pending GPU access
+
+This branch supports a course research project extending AgentBench's ALFWorld
+House Holding evaluation. The project asks:
+
+> **Does providing an LLM agent with an explicit structured task-state summary
+> improve its performance on multi-round AgentBench tasks?**
+
+AgentBench reports outcomes such as successful completion, invalid actions, and
+Task Limit Exceeded. This extension investigates whether some failures may be
+associated with poor task-state maintenance, including forgetting the goal,
+losing track of completed steps, repeating failed actions, or failing to use new
+environmental feedback.
+
+## Experimental design
+
+The same open-source instruction-following model and ALFWorld tasks are used in
+two matched conditions:
+
+- **Baseline:** standard AgentBench conversation history.
+- **Structured state:** the same setup plus a compact record of the original
+  goal, current situation, confirmed successful actions, failed actions, and
+  the agent's remaining plan.
+
+The tracker uses only information visible to the agent. It does not access
+hidden simulator state or a ground-truth solution path.
+
+The full study contains 24 fixed tasks—four from each of ALFWorld's six task
+types—in each condition. A four-task-per-condition pilot is provided to verify
+the system before running the full experiment.
+
+## Measurements
+
+- Task-completion rate
+- Task Limit Exceeded rate
+- Repeated and repeated-failed actions
+- Average interaction rounds
+- Deterministically identifiable failure and state-error labels
+- Matched per-task improvements, regressions, and unchanged outcomes
+
+## Research files
+
+- [`research/state_maintenance/README.md`](research/state_maintenance/README.md): setup and run instructions
+- [`research/state_maintenance/EXPERIMENT_PROTOCOL.md`](research/state_maintenance/EXPERIMENT_PROTOCOL.md): formal protocol and interpretation rules
+- [`research/state_maintenance/analyze_results.py`](research/state_maintenance/analyze_results.py): baseline-versus-structured analysis
+- [`research/state_maintenance/preflight.py`](research/state_maintenance/preflight.py): CPU-only readiness checks
+- [`data/alfworld/research_24.json`](data/alfworld/research_24.json): fixed full-study split
+- [`data/alfworld/research_pilot_4.json`](data/alfworld/research_pilot_4.json): fixed pilot split
+- [`configs/assignments/alfworld_state_experiment.yaml`](configs/assignments/alfworld_state_experiment.yaml): full experiment
+- [`configs/assignments/alfworld_state_pilot.yaml`](configs/assignments/alfworld_state_pilot.yaml): pilot experiment
+
+## Validate without a GPU
+
+```bash
+python -m unittest discover -s tests/state_maintenance -v
+python research/state_maintenance/preflight.py
+```
+
+GPU access is needed for open-source model inference, not for these validation
+checks. Pilot and full-run instructions are provided in the research README.
+
+---
+
+# Original AgentBench v0.2 Documentation
 
 ![](./assets/cover.jpg)
 <p align="center">
