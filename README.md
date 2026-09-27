@@ -46,6 +46,7 @@ the system before running the full experiment.
 
 ## Research files
 
+- [`research/state_maintenance/WORKFLOW.md`](research/state_maintenance/WORKFLOW.md): illustrated system workflow
 - [`research/state_maintenance/README.md`](research/state_maintenance/README.md): setup and run instructions
 - [`research/state_maintenance/EXPERIMENT_PROTOCOL.md`](research/state_maintenance/EXPERIMENT_PROTOCOL.md): formal protocol and interpretation rules
 - [`research/state_maintenance/analyze_results.py`](research/state_maintenance/analyze_results.py): baseline-versus-structured analysis

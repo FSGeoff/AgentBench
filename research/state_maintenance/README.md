@@ -3,6 +3,11 @@
 This extension tests one question: **Does an explicit structured task-state
 summary improve an LLM agent's performance on multi-round ALFWorld tasks?**
 
+![AgentBench ALFWorld state-maintenance workflow](agentbench_state_workflow.svg)
+
+See [`WORKFLOW.md`](WORKFLOW.md) for a step-by-step explanation of how
+AgentBench, the LLM, ALFWorld, the state tracker, and result analysis interact.
+
 The experiment compares two matched conditions:
 
 - `alfworld-state-baseline`: the unmodified AgentBench conversation-history approach.
