@@ -14,15 +14,16 @@ class PreflightTests(unittest.TestCase):
         report = preflight.run_checks()
         self.assertEqual(report["pilot_tasks"], 4)
         self.assertEqual(report["full_tasks"], 24)
-        self.assertEqual(report["conditions"], 2)
+        self.assertEqual(report["conditions"], 3)
 
-    def test_rejects_mismatched_pair(self):
+    def test_rejects_mismatched_condition_split(self):
         definitions = {
             "base": {"parameters": {"split": "same", "state_mode": "baseline"}},
-            "state": {"parameters": {"split": "different", "state_mode": "structured"}},
+            "goal": {"parameters": {"split": "different", "state_mode": "goal_reminder"}},
+            "state": {"parameters": {"split": "same", "state_mode": "structured"}},
         }
         with self.assertRaises(ValueError):
-            preflight.check_pair(definitions, "base", "state", "same")
+            preflight.check_conditions(definitions, ["base", "goal", "state"], "same")
 
 
 if __name__ == "__main__":
