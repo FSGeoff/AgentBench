@@ -81,6 +81,12 @@ class StateTracker:
         return True
 
     def _record_progress(self, action: str) -> None:
+        # Navigation and reversible container operations are represented by
+        # their current-value fields. Keeping them in progress would preserve
+        # obsolete states (for example, an earlier location or an open action
+        # followed by a close action).
+        if re.match(r"(?:go to|open|close|look|examine|inventory)\b", action):
+            return
         if action not in self.state.confirmed_progress:
             self.state.confirmed_progress.append(action)
 
