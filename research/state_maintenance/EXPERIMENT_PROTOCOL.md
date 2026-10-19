@@ -2,73 +2,95 @@
 
 ## Research question
 
-Does providing an LLM agent with an explicit structured task-state summary
-improve performance on multi-round AgentBench House Holding tasks?
+When current facts and prior progress already appear in the conversation history, does a compact current-state record improve the agent's next-subgoal decisions and task completion?
+
+## Hypothesis
+
+The structured condition will produce higher completion and a higher rate of state-consistent next-subgoal decisions than both the baseline and goal-reminder conditions.
+
+Repeated action counts are descriptive and will not be treated as evidence of forgetting or improved planning.
 
 ## Design
 
-Use one open-source instruction-following model and the same 24 ALFWorld tasks
-in both conditions. The split contains four fixed tasks from each of the six
-ALFWorld task categories. Run the baseline and structured conditions with the
-same model checkpoint, inference server, temperature (`0`), maximum new tokens,
-prompt examples, maximum rounds (`35`), and hardware.
+Use one open-source instruction-following model and the same 24 fixed ALFWorld tasks in three conditions:
 
-The independent variable is whether the current structured state summary is
-included in the user message. The summary is removed from older turns when a
-new summary is supplied, preventing stale summaries from accumulating.
+1. Baseline conversation history
+2. Baseline history plus a repeated goal reminder
+3. The same goal reminder plus a structured current-state record
+
+Hold the model checkpoint, inference server, temperature, maximum new tokens, demonstrations, maximum rounds, hardware, and task order constant.
+
+The goal-reminder comparison controls for assistance supplied by repeating the goal. The structured record contains no recommended action and no model-generated plan.
+
+## Focal decision and decision points
+
+The focal decision is the next-subgoal choice after a confirmed state change. A decision point occurs after an action changes a task-relevant state, including location, inventory, object condition, container state, or goal progress.
+
+The following action is scored for:
+
+- State consistency: it does not contradict current observable facts.
+- Progress direction: it attempts to advance an unfinished goal condition.
+
+Use `DECISION_RUBRIC.md` for blinded trajectory review. Automatic contradiction flags supplement rather than replace manual review.
+
+## Preventing obsolete information
+
+The tracker maintains one current value per entity and state attribute. A newer confirmed fact supersedes the prior displayed value. Superseded values remain in the audit log but do not appear in the prompt.
+
+Failed actions are context-bound. Remove a displayed failure when the relevant location, inventory, or container state changes, or when the action later succeeds. If a previously satisfied goal condition becomes false, return it to pending.
+
+The tracker may use only visible observations, chosen actions, and the original task. It may not read hidden simulator state or expert plans.
 
 ## Measures
 
-Primary measure:
+Primary:
 
-- Task-completion rate.
+- Task-completion rate
 
-Secondary measures:
+Main process measure:
 
-- Task Limit Exceeded count and rate.
-- Total and average repeated actions.
-- Repeated failed actions.
-- Average interaction rounds.
-- Deterministically identifiable failure and state-error labels.
+- State-consistent next-subgoal decision rate
+
+Supporting descriptive measures:
+
+- Task Limit Exceeded rate
+- Interaction rounds
+- Invalid actions
+- Repeated and repeated-failed actions
+- State-contradictory actions
+- Recovery after an unsuccessful action
 
 ## Procedure
 
-1. Record the model name, exact checkpoint/revision, GPU, VRAM, software
-   versions, and experiment date.
-2. Run the CPU-only tests before using the GPU.
-3. Run `python research/state_maintenance/preflight.py`.
-4. Run the four-task pilot in both conditions and verify its output structure.
-5. Confirm that both full task definitions load `research_24.json` and contain 24 indices.
-6. Start the model server once and do not alter its settings between conditions.
-7. Run both full conditions. Preserve the raw `runs.jsonl`, `overall.json`, and logs.
-8. Run `analyze_results.py` on the two full `runs.jsonl` files.
-9. Inspect any missing or duplicate task indices before interpreting results.
-10. Manually review trajectories labeled `repeated_action` or
-   `repeated_failed_action`; record manual judgments separately from automatic labels.
+1. Record model, checkpoint, GPU, VRAM, software versions, and date.
+2. Run CPU-only tests and preflight.
+3. Run the four-task pilot in all three conditions.
+4. Verify output fields and state replacement behavior.
+5. Start the model server once and preserve all inference settings.
+6. Run all three full conditions on the same 24 tasks.
+7. Preserve raw trajectories, state snapshots, superseded facts, and logs.
+8. Create a blinded annotation sheet without condition labels.
+9. Score predefined decision points with the decision rubric.
+10. Run the analysis script and inspect missing or duplicate task indices.
+11. Report completion first, then decision quality, then descriptive behavior.
 
 ## Interpretation rules
 
-Treat this as a small, controlled extension rather than a new general
-benchmark. Report raw counts with percentages. A higher completion rate and
-lower task-limit/repetition measures support the hypothesis, but mixed results
-should be reported as mixed. Do not claim statistical or cross-model
-generalization from 24 tasks and one model.
+Higher completion supports the usefulness of the aid in this setting. A structured-condition advantage over the goal-reminder control provides evidence that organization contributes beyond repeating the goal. The study cannot fully isolate token count, formatting, or attention effects.
 
-The structured condition adds prompt tokens and may change behavior because of
-formatting or increased attention, not memory alone. Report this as a confound.
-The tracked "remaining steps" are the model's latest expressed plan, not a
-ground-truth plan. Automated state-error labels are reproducible indicators,
-not proof of an internal cognitive failure.
+A higher next-subgoal decision rate supports improved use of current facts at defined decision points. Reduced repetition alone does not establish better planning and does not prove forgetting.
+
+Even a perfectly accurate state record cannot supply causal knowledge, planning competence, or correct understanding of ALFWorld affordances. Limit conclusions to one model, one environment, and 24 tasks.
 
 ## Reproducibility record
 
-Complete this before the final run:
-
 - AgentBench branch and commit:
-- Model/checkpoint and revision:
+- Model checkpoint and revision:
 - Inference software and version:
 - GPU and VRAM:
 - Python and Docker versions:
 - Run date:
 - Random seed, if applicable:
 - Output directory:
+- Annotation reviewer:
+- Blinding procedure:
