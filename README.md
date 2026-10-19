@@ -1,70 +1,47 @@
-# AgentBench State-Maintenance Research Extension
+# AgentBench Current-State Research Extension
 
 > **Research branch:** `research/state-maintenance-v0.2`
 >
 > **Base implementation:** archived paper-era AgentBench v0.2
 >
-> **Status:** implementation and CPU-only validation complete; real model runs pending GPU access
+> **Status:** revised implementation complete; real model runs pending
 
-This branch supports a course research project extending AgentBench's ALFWorld
-House Holding evaluation. The project asks:
+This branch tests whether organizing facts already present in an interaction history helps an LLM choose the next unfinished subgoal in ALFWorld House Holding tasks.
 
-> **Does providing an LLM agent with an explicit structured task-state summary
-> improve its performance on multi-round AgentBench tasks?**
+## Revised design
 
-AgentBench reports outcomes such as successful completion, invalid actions, and
-Task Limit Exceeded. This extension investigates whether some failures may be
-associated with poor task-state maintenance, including forgetting the goal,
-losing track of completed steps, repeating failed actions, or failing to use new
-environmental feedback.
+The same model and 24 fixed tasks run in three conditions:
 
-## Experimental design
+- Baseline conversation history
+- The same history plus a repeated goal reminder
+- The same goal reminder plus a structured current-state record
 
-The same open-source instruction-following model and ALFWorld tasks are used in
-two matched conditions:
+The goal-reminder condition helps separate the effect of repeating the goal from the effect of organizing current facts. The structured record contains no recommended next action and no model-generated plan.
 
-- **Baseline:** standard AgentBench conversation history.
-- **Structured state:** the same setup plus a compact record of the original
-  goal, current situation, confirmed successful actions, failed actions, and
-  the agent's remaining plan.
+## Main outcomes
 
-The tracker uses only information visible to the agent. It does not access
-hidden simulator state or a ground-truth solution path.
+Task completion is primary. The main process measure is the proportion of state-consistent next-subgoal decisions after confirmed state changes. Repetition remains descriptive because repeated actions do not establish forgetting or improved planning.
 
-The full study contains 24 fixed tasks—four from each of ALFWorld's six task
-types—in each condition. A four-task-per-condition pilot is provided to verify
-the system before running the full experiment.
-
-## Measurements
-
-- Task-completion rate
-- Task Limit Exceeded rate
-- Repeated and repeated-failed actions
-- Average interaction rounds
-- Deterministically identifiable failure and state-error labels
-- Matched per-task improvements, regressions, and unchanged outcomes
+The tracker replaces obsolete displayed facts, keeps superseded values only in the audit log, and removes failures when their context changes or the action later succeeds. It uses no hidden ALFWorld state or expert solution.
 
 ## Research files
 
-- [`research/state_maintenance/WORKFLOW.md`](research/state_maintenance/WORKFLOW.md): illustrated system workflow
-- [`research/state_maintenance/README.md`](research/state_maintenance/README.md): setup and run instructions
-- [`research/state_maintenance/EXPERIMENT_PROTOCOL.md`](research/state_maintenance/EXPERIMENT_PROTOCOL.md): formal protocol and interpretation rules
-- [`research/state_maintenance/analyze_results.py`](research/state_maintenance/analyze_results.py): baseline-versus-structured analysis
-- [`research/state_maintenance/preflight.py`](research/state_maintenance/preflight.py): CPU-only readiness checks
-- [`data/alfworld/research_24.json`](data/alfworld/research_24.json): fixed full-study split
-- [`data/alfworld/research_pilot_4.json`](data/alfworld/research_pilot_4.json): fixed pilot split
-- [`configs/assignments/alfworld_state_experiment.yaml`](configs/assignments/alfworld_state_experiment.yaml): full experiment
-- [`configs/assignments/alfworld_state_pilot.yaml`](configs/assignments/alfworld_state_pilot.yaml): pilot experiment
+- [Research overview](research/state_maintenance/README.md)
+- [Experiment protocol](research/state_maintenance/EXPERIMENT_PROTOCOL.md)
+- [Decision rubric](research/state_maintenance/DECISION_RUBRIC.md)
+- [Workflow](research/state_maintenance/WORKFLOW.md)
+- [Analysis script](research/state_maintenance/analyze_results.py)
+- [Fixed full split](data/alfworld/research_24.json)
+- [Fixed pilot split](data/alfworld/research_pilot_4.json)
 
-## Validate without a GPU
+## CPU-only validation
 
 ```bash
 python -m unittest discover -s tests/state_maintenance -v
 python research/state_maintenance/preflight.py
 ```
 
-GPU access is needed for open-source model inference, not for these validation
-checks. Pilot and full-run instructions are provided in the research README.
+GPU access is needed for model inference, not for the tracker, analysis, or tests.
 
 ---
 
