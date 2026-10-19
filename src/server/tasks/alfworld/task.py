@@ -45,8 +45,8 @@ class ALFWorld(Task):
         # other configs
         self.max_step = kwargs.get("max_step", 50)
         self.state_mode = kwargs.get("state_mode", "baseline")
-        if self.state_mode not in {"baseline", "structured"}:
-            raise ValueError("state_mode must be 'baseline' or 'structured'")
+        if self.state_mode not in {"baseline", "goal_reminder", "structured"}:
+            raise ValueError("state_mode must be baseline, goal_reminder, or structured")
         self.prefixes = {
             'pick_and_place': 'put',
             'pick_clean_then_place': 'clean',
@@ -175,6 +175,9 @@ class ALFWorld(Task):
                 "interaction_rounds": 0,
                 "failure_types": [],
                 "state_related_errors": [],
+                "decision_points": 0,
+                "state_consistent_decisions": 0,
+                "state_inconsistent_actions": 0,
             },
         }
         session.inject({"role": "user", "content": self.get_task_instruction()})
@@ -186,7 +189,13 @@ class ALFWorld(Task):
         history[0] = "Here is one example.\n" + history[0]
         self.inject_info(session, history)
 
-        state_prompt = tracker.render() if self.state_mode == "structured" else ""
+        state_prompt = (
+            tracker.render()
+            if self.state_mode == "structured"
+            else tracker.render_goal_reminder()
+            if self.state_mode == "goal_reminder"
+            else ""
+        )
         init_prompt = "Here is your task. " + ob + state_prompt + self.get_available_actions(info.get('admissible_commands', [[]])[0])
         log_info["init_prompt"] = init_prompt
         session.inject({"role": "user", "content": init_prompt})
@@ -215,14 +224,22 @@ class ALFWorld(Task):
             # actions and state summaries are refreshed every round and would
             # otherwise leave stale copies in the conversation history.
             prior_user_message = session.history[-2].content
-            prior_user_message = prior_user_message.split("STRUCTURED TASK STATE")[0]
+            prior_user_message = prior_user_message.split("CURRENT TASK GOAL")[0]
+            prior_user_message = prior_user_message.split("CURRENT OBSERVABLE STATE")[0]
             prior_user_message = prior_user_message.split("AVAILABLE ACTIONS")[0]
             session.history[-2].content = prior_user_message
 
+            decision_evaluation = tracker.evaluate_decision(action)
             observation, reward, done, info = env.step([action])
             observation, reward, done = process_ob(observation[0]), info['won'][0], done[0]
             state_update = tracker.update(action, observation, output)
-            state_prompt = tracker.render() if self.state_mode == "structured" else ""
+            state_prompt = (
+                tracker.render()
+                if self.state_mode == "structured"
+                else tracker.render_goal_reminder()
+                if self.state_mode == "goal_reminder"
+                else ""
+            )
             session.inject({"role": "user", "content": observation + state_prompt + self.get_available_actions(
                 info.get('admissible_commands', [[]])[0])})
 
@@ -237,6 +254,8 @@ class ALFWorld(Task):
                 "action_failed": state_update["action_failed"],
                 "repeated_action": state_update["repeated_action"],
                 "state_snapshot": state_update["state"],
+                "state_changed": state_update["state_changed"],
+                "decision_evaluation": decision_evaluation,
             }
             log_info["log"].append(payload)
             experiment = log_info["experiment"]
@@ -245,6 +264,9 @@ class ALFWorld(Task):
             experiment["repeated_failed_actions"] = tracker.repeated_failed_actions
             experiment["interaction_rounds"] = i + 1
             experiment["state_related_errors"] = list(tracker.state_related_errors)
+            experiment["decision_points"] = tracker.decision_points
+            experiment["state_consistent_decisions"] = tracker.state_consistent_decisions
+            experiment["state_inconsistent_actions"] = tracker.state_inconsistent_actions
 
             # print("====== action ======")
             # print("output: ", output)
