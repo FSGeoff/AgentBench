@@ -1,104 +1,44 @@
-# AgentBench–ALFWorld Experiment Workflow
-
-![AgentBench ALFWorld state-maintenance workflow](agentbench_state_workflow.svg)
+# AgentBench ALFWorld Experiment Workflow
 
 ## Purpose
 
-This workflow shows how the AgentBench extension connects an open-source LLM,
-the ALFWorld House Holding environment, and the structured task-state tracker.
-AgentBench remains the experiment coordinator. ALFWorld executes household
-actions, while the state tracker records observable progress and supplies the
-structured summary only in the experimental condition.
+AgentBench coordinates three matched ALFWorld conditions. The extension tests whether a compact current-state record improves next-subgoal decisions after confirmed state changes.
 
-## Workflow components
+## Conditions
 
-### 1. AgentBench coordinator
+- Baseline receives standard conversation history.
+- Goal-reminder receives the same history plus the original goal before each action.
+- Structured state receives the same goal reminder plus current observable state.
 
-The experiment begins with the AgentBench assigner. It loads the selected model,
-the fixed task split, the maximum of 35 interaction rounds, and either the
-baseline or structured-state condition.
+The third condition contains no recommended next action or generated plan.
 
-Pilot command:
+## Interaction cycle
 
-```bash
-python -m src.assigner -c configs/assignments/alfworld_state_pilot.yaml
-```
+1. AgentBench sends the task, observation, and admissible actions.
+2. The LLM selects one action.
+3. ALFWorld executes it and returns visible feedback.
+4. The tracker updates current fields and marks replaced values as superseded.
+5. AgentBench logs whether the next action conflicts with known current state.
+6. The loop continues until success or a finish condition.
 
-Full-study command:
+## Staleness policy
 
-```bash
-python -m src.assigner -c configs/assignments/alfworld_state_experiment.yaml
-```
+Current fields replace rather than accumulate. A newer location, inventory fact, object condition, or container state supersedes its prior value. Context-bound failures leave the displayed record when their preconditions change or the action later succeeds.
 
-### 2. Matched conditions
+The full trajectory and superseded values remain available to the researcher but are not shown to the LLM.
 
-Both conditions use the same model, task files, prompt demonstrations, available
-actions, decoding settings, and round limit.
+## Focal decision
 
-- **Baseline:** the LLM receives AgentBench's standard conversation history.
-- **Structured state:** the LLM also receives the current structured task-state
-  summary.
+After a meaningful state change, the model must select the next unfinished subgoal. Manual blinded review scores whether the following action is consistent with current state and directed toward remaining task requirements.
 
-This single controlled difference supports a direct comparison between the two
-conditions.
+Automatic contradiction rules can identify obvious cases, such as trying to take an object already held. They cannot determine whether every legal action reflects a good plan.
 
-### 3. LLM action selection
+## Termination
 
-The LLM reads the goal, current ALFWorld observation, and admissible commands.
-It returns an `ACTION:` line. The existing AgentBench action processor validates
-and normalizes that response before execution.
+A run ends when ALFWorld reports success, the model produces an invalid format or action, the context limit is reached, a repeated-action loop triggers the existing AgentBench stop rule, or 35 rounds elapse.
 
-### 4. ALFWorld execution
+## Analysis
 
-`src/server/tasks/alfworld/task.py` sends the selected command to ALFWorld. The
-environment returns a new observation, completion status, and reward. The LLM
-does not directly control the operating system or receive hidden simulator data.
+The analysis compares completion across all three conditions. It then compares state-consistent next-subgoal decisions, followed by timeouts, rounds, invalid actions, and repetition as descriptive measures.
 
-### 5. State tracking
-
-`src/server/tasks/alfworld/state_tracker.py` updates the following fields using
-only the visible trajectory:
-
-- Original goal
-- Current observation
-- Confirmed successful actions
-- Failed actions
-- Repeated and repeated-failed actions
-- Latest plan extracted from the model's `THOUGHT:` text
-
-In both conditions, this information is logged for later analysis. Only the
-structured-state condition displays the rendered summary to the LLM. Previous
-summaries are removed when the next one is supplied so stale state does not
-accumulate in the history.
-
-### 6. Termination decision
-
-The interaction loop continues until one of the following occurs:
-
-- ALFWorld reports successful task completion.
-- The model produces an invalid format or action.
-- The model reaches its context limit.
-- A repeated-action loop is detected.
-- The experiment reaches the 35-round task limit.
-
-### 7. Result storage and comparison
-
-AgentBench writes each trajectory to `runs.jsonl`. The additional experiment
-record contains state snapshots, interaction rounds, repeated actions, repeated
-failed actions, state-error labels, and failure types.
-
-After both conditions finish, `analyze_results.py` produces:
-
-- `comparison_summary.json`
-- `task_level_results.csv`
-
-These outputs compare completion rate, Task Limit Exceeded rate, average rounds,
-repeated actions, and matched per-task improvements or regressions.
-
-## Interpretation boundary
-
-The tracker does not provide a correct solution or inspect ALFWorld's hidden
-state. Its remaining-steps field contains the model's latest expressed plan,
-not a ground-truth plan. Therefore, the experiment tests whether an explicit
-record of the observable trajectory assists the agent; it does not establish
-that the LLM possesses human memory or reasoning.
+Reduced repetition alone will not support a planning or forgetting claim. Even a perfect state record cannot make an agent understand environment rules or form an effective plan.
