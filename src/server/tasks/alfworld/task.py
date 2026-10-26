@@ -13,10 +13,18 @@ import traceback
 class ALFWorld(Task):
 
     def __init__(self, **kwargs):
-        # load data_path 
-        self.data_path = kwargs.get("data_path", None)
-        if self.data_path is None:
+        # Expand user/environment placeholders so research tasks can run
+        # locally without the original Docker-only /AgentBench path.
+        raw_data_path = kwargs.get("data_path", None)
+        if raw_data_path is None:
             raise Exception("missing parameter data_path")
+        self.data_path = os.path.abspath(
+            os.path.expanduser(os.path.expandvars(raw_data_path))
+        )
+        if not os.path.isdir(self.data_path):
+            raise FileNotFoundError(
+                f"ALFWorld data directory does not exist: {self.data_path}"
+            )
         os.environ["ALFWORLD_DATA"] = self.data_path
 
         # load config for alfworld benchmark
@@ -62,9 +70,7 @@ class ALFWorld(Task):
         return list(range(len(self.data_files)))
 
     def calculate_overall(self, results: List[TaskOutput]) -> Dict[str, Any]:
-        """
-            TaskOutput.result 0/1
-        """
+        """TaskOutput.result is 0/1."""
         overall = {
             "total": len([config for config in results if config]),
             "pass": len([config for config in results if
@@ -72,39 +78,7 @@ class ALFWorld(Task):
         }
         overall["wrong"] = overall["total"] - overall["pass"]
         overall["success_rate"] = overall["pass"] / overall["total"] if overall["total"] else 0
-        return {
-            "overall": overall,
-        }
-
-    # def predict_all(self, agent: Agent, inputs: List) -> List:
-    #     print(f"Start Predicting All ...")
-
-    #     count = self.workers
-    #     if self.worker_limit:
-    #         count = min(self.workers, self.worker_limit)
-
-    #     executor = ProcessPoolExecutor(max_workers=count)
-    #     results = []
-    #     processes = []
-
-    #     parameters = [(input_, agent, index) for index, input_ in enumerate(inputs)]
-    #     for idx, parameter in enumerate(parameters):
-    #         future = executor.submit(self.call_wrap, parameter)
-    #         processes.append(future)
-
-    #     with tqdm(total=len(parameters)) as pbar:
-    #         for process in as_completed(processes):
-    #             results.append(process.result())
-    #             pbar.update(1)
-
-    #     return results
-
-    # def call_wrap(self, parameters):
-    #     data_item, agent, index = parameters
-    #     session = agent.create_session()
-    #     result = self.predict_single(session, data_item, agent.name)
-    #     self.save_single(index, data_item, result, session)
-    #     return result
+        return {"overall": overall}
 
     async def start_sample(self, index, session: Session) -> TaskSampleExecutionResult:
         print("start sample")
@@ -129,17 +103,13 @@ class ALFWorld(Task):
 
     @staticmethod
     def get_task_instruction():
-        # return "Interact with a household to solve a task. Imagine you are an intelligent agent in a household environment and your target is to perform actions to complete the task goal. In the beginning of your interactions, you will be given the detailed description of the current environment and your goal to accomplish. For each of your turn, you should choose from two actions: \"THOUGHT\" or \"ACTION\". If you choose \"THOUGHT\", you should first think about the current condition and plan for your future actions, and then output your action in this turn. Your output must strictly follow this format:\"THOUGHT: your thoughts.\n ACTION: your next action\n\"; If you choose \"ACTION\", you should directly output the action in this turn. Your output must strictly follow this format:\"ACTION: your next action\n\". After your each turn, the environment will give you immediate feedback based on which you plan your next few steps. if the envrionment output \"Nothing happened\", that means the previous action is invalid and you should try more options.\n\n"
         return "Interact with a household to solve a task. Imagine you are an intelligent agent in a household environment and your target is to perform actions to complete the task goal. At the beginning of your interactions, you will be given the detailed description of the current environment and your goal to accomplish. For each of your turn, you will be given a list of actions which you can choose one to perform in this turn. You should choose from two actions: \"THOUGHT\" or \"ACTION\". If you choose \"THOUGHT\", you should first think about the current condition and plan for your future actions, and then output your action in this turn. Your output must strictly follow this format:\"THOUGHT: your thoughts.\n ACTION: your next action\n\"; If you choose \"ACTION\", you should directly output the action in this turn. Your output must strictly follow this format:\"ACTION: your next action\n\". After your each turn, the environment will give you immediate feedback based on which you plan your next few steps. if the environment output \"Nothing happened\", that means the previous action is invalid and you should try more options.\n Reminder: \n1. the action must be chosen from the given available actions. Any actions except provided available actions will be regarded as illegal. \n2. Think when necessary, try to act directly more in the process.\n\n"
 
     def get_prompt(self, filename: str):
-        # return []
         for k, v in self.prefixes.items():
             if filename.startswith(k):
-                example = self.prompts[v]
-                return example
+                return self.prompts[v]
         raise Exception(f"unsupported name: {filename}")
-        # return self.prompts["naive_example"]
 
     @staticmethod
     def inject_info(session: Session, history: List):
@@ -156,14 +126,9 @@ class ALFWorld(Task):
 
     async def alfworld_run(self, session: Session, env: Any):
         finish_reason = SampleStatus.COMPLETED
-        # env init
         ob, info = env.reset()
         ob = '\n'.join(ob[0].split('\n\n')[1:])
         name = '/'.join(info['extra.gamefile'][0].split('/')[-3:-1])
-        # history = self.get_prompt(name)
-        # add instruction
-        # history[0] = self.get_task_instruction() + "Here is one example.\n" + history[0]
-        # self.inject_info(session, history)
         tracker = StateTracker(original_goal=ob, initial_observation=ob)
         log_info = {
             "log": [],
@@ -184,7 +149,6 @@ class ALFWorld(Task):
         session.inject(
             {"role": "agent", "content": "OK. I'll follow your instructions and try my best to solve the task."})
 
-        # 1-shot naive example
         history = self.get_prompt(name)
         history[0] = "Here is one example.\n" + history[0]
         self.inject_info(session, history)
@@ -199,12 +163,7 @@ class ALFWorld(Task):
         init_prompt = "Here is your task. " + ob + state_prompt + self.get_available_actions(info.get('admissible_commands', [[]])[0])
         log_info["init_prompt"] = init_prompt
         session.inject({"role": "user", "content": init_prompt})
-        # init 
-        # for his in session.history:
-        #     print(his)
-        # print("============ history end ==============")
 
-        # interact
         for i in range(0, self.max_step):
             output = await session.action()
             if output.status == AgentOutputStatus.AGENT_CONTEXT_LIMIT:
@@ -213,16 +172,13 @@ class ALFWorld(Task):
                 break
             output = output.content or ""
 
-            # process action
             admissible_commands = info.get('admissible_commands', [[]])[0]
             action = process_action(output, admissible_commands)
             if not action:
                 finish_reason = SampleStatus.AGENT_INVALID_ACTION
                 log_info["experiment"]["failure_types"].append("invalid_format_or_action")
                 break
-            # Keep only the durable observation in older turns.  Available
-            # actions and state summaries are refreshed every round and would
-            # otherwise leave stale copies in the conversation history.
+
             prior_user_message = session.history[-2].content
             prior_user_message = prior_user_message.split("CURRENT TASK GOAL")[0]
             prior_user_message = prior_user_message.split("CURRENT OBSERVABLE STATE")[0]
@@ -243,7 +199,6 @@ class ALFWorld(Task):
             session.inject({"role": "user", "content": observation + state_prompt + self.get_available_actions(
                 info.get('admissible_commands', [[]])[0])})
 
-            # save
             payload = {
                 "round": i + 1,
                 "output": output,
@@ -268,17 +223,6 @@ class ALFWorld(Task):
             experiment["state_consistent_decisions"] = tracker.state_consistent_decisions
             experiment["state_inconsistent_actions"] = tracker.state_inconsistent_actions
 
-            # print("====== action ======")
-            # print("output: ", output)
-            # print("action: ", action)
-            # print("obs and commands: ", session.history[-1]["content"])
-            # print("====== end action =======")
-            # print("====== ob =======")
-            # print("ob: ", observation)
-            # print("====== end ob =======\n")
-            # print("action: ", action, "ob: ", observation)
-
-            # failure test
             if len(log_info["log"]) > 3:
                 pre_logs = log_info["log"][-3:]
                 pre_acts = [pre_log["output"] for pre_log in pre_logs]
