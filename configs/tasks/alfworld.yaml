@@ -24,35 +24,41 @@ alfworld-std:
 alfworld-state-baseline:
   parameters:
     name: alfworld-state-baseline
+    data_path: "$ALFWORLD_DATA"
     split: "research_24"
     state_mode: "baseline"
 
 alfworld-state-goal-reminder:
   parameters:
     name: alfworld-state-goal-reminder
+    data_path: "$ALFWORLD_DATA"
     split: "research_24"
     state_mode: "goal_reminder"
 
 alfworld-state-structured:
   parameters:
     name: alfworld-state-structured
+    data_path: "$ALFWORLD_DATA"
     split: "research_24"
     state_mode: "structured"
 
 alfworld-state-pilot-baseline:
   parameters:
     name: alfworld-state-pilot-baseline
+    data_path: "$ALFWORLD_DATA"
     split: "research_pilot_4"
     state_mode: "baseline"
 
 alfworld-state-pilot-goal-reminder:
   parameters:
     name: alfworld-state-pilot-goal-reminder
+    data_path: "$ALFWORLD_DATA"
     split: "research_pilot_4"
     state_mode: "goal_reminder"
 
 alfworld-state-pilot-structured:
   parameters:
     name: alfworld-state-pilot-structured
+    data_path: "$ALFWORLD_DATA"
     split: "research_pilot_4"
     state_mode: "structured"
