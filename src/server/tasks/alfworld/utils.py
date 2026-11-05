@@ -21,6 +21,45 @@ def process_ob(ob):
         ob = ob[ob.find('. ')+2:]    
     return ob
 
+
+def normalize_agent_turn(output):
+    """Keep one real ALFWorld action in each model turn.
+
+    Completion-style models may continue by inventing USER feedback or
+    additional ACTION turns. Those continuations never occurred in the
+    environment and must not enter the next inference context.
+    """
+    text = (output or "").strip()
+    action_match = re.search(
+        r"\bACTION\s*:\s*",
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    if not action_match:
+        return text
+
+    prefix = text[:action_match.start()].strip()
+    remainder = text[action_match.end():].lstrip()
+
+    # An ALFWorld command occupies one line.
+    action = re.split(r"[\r\n]", remainder, maxsplit=1)[0].strip()
+
+    # Stop same-line fabricated continuations such as:
+    # ACTION: look USER: ... ACTION: go to shelf 1
+    action = re.split(
+        r"\s+(?=(?:USER|AGENT|ASSISTANT|THOUGHT|ACTION)\s*:)",
+        action,
+        maxsplit=1,
+        flags=re.IGNORECASE,
+    )[0].strip()
+
+    normalized_action = f"ACTION: {action}"
+    if prefix:
+        return f"{prefix}\n{normalized_action}"
+    return normalized_action
+
+
 def process_action(action, choices, limit=0.01, to_print=False):
     if to_print:
         print("preprocess action: ", action)

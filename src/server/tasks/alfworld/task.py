@@ -170,7 +170,12 @@ class ALFWorld(Task):
                 finish_reason = SampleStatus.AGENT_CONTEXT_LIMIT
                 log_info["experiment"]["failure_types"].append("context_limit_exceeded")
                 break
-            output = output.content or ""
+            raw_output = output.content or ""
+            output = normalize_agent_turn(raw_output)
+
+            # Prevent fabricated USER or additional ACTION turns from
+            # contaminating the next inference call.
+            session.history[-1].content = output
 
             admissible_commands = info.get('admissible_commands', [[]])[0]
             action = process_action(output, admissible_commands)
@@ -202,6 +207,7 @@ class ALFWorld(Task):
             payload = {
                 "round": i + 1,
                 "output": output,
+                "raw_output": raw_output,
                 "action": action,
                 "admissible_commands": admissible_commands,
                 "observation": observation,
